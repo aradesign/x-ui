@@ -1,0 +1,245 @@
+{{ template "page/head_start" .}}
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' shop-page'">
+  <a-sidebar></a-sidebar>
+  <a-layout id="content-layout">
+    <a-layout-content>
+      <a-spin :spinning="loadingStates.spinning" :delay="200" tip="Loading...">
+        <a-card hoverable>
+          <a-tabs default-active-key="packages">
+            <a-tab-pane key="packages">
+              <template #tab>
+                <a-icon type="shop"></a-icon>
+                <span>Packages</span>
+              </template>
+              <a-row :gutter="[16, 16]">
+                <a-col :xs="24" :lg="10">
+                  <a-card title="Create / Update package">
+                    <a-form layout="vertical">
+                      <a-form-item label="Name">
+                        <a-input v-model="packageForm.name"></a-input>
+                      </a-form-item>
+                      <a-form-item label="Data (GB)">
+                        <a-input-number :min="0" v-model="packageForm.dataGb" :style="{ width: '100%' }"></a-input-number>
+                      </a-form-item>
+                      <a-form-item label="Duration (days)">
+                        <a-input-number :min="0" v-model="packageForm.durationDays" :style="{ width: '100%' }"></a-input-number>
+                      </a-form-item>
+                      <a-form-item label="Price">
+                        <a-input-number :min="0" v-model="packageForm.price" :style="{ width: '100%' }"></a-input-number>
+                      </a-form-item>
+                      <a-form-item>
+                        <a-switch v-model="packageForm.isActive"></a-switch>
+                        <span style="margin-left:8px;">Active</span>
+                      </a-form-item>
+                      <a-space>
+                        <a-button type="primary" @click="savePackage">Save</a-button>
+                        <a-button @click="resetPackageForm">Clear</a-button>
+                      </a-space>
+                    </a-form>
+                  </a-card>
+                </a-col>
+                <a-col :xs="24" :lg="14">
+                  <a-table :data-source="packages" :row-key="record => record.id">
+                    <a-table-column title="ID" data-index="id" key="id" width="70"></a-table-column>
+                    <a-table-column title="Name" data-index="name" key="name"></a-table-column>
+                    <a-table-column title="GB" data-index="dataGb" key="dataGb" width="90"></a-table-column>
+                    <a-table-column title="Days" data-index="durationDays" key="durationDays" width="90"></a-table-column>
+                    <a-table-column title="Price" data-index="price" key="price" width="120"></a-table-column>
+                    <a-table-column title="Active" key="isActive" width="100">
+                      <template slot-scope="text, record">
+                        <a-tag color="green" v-if="record.isActive">Yes</a-tag>
+                        <a-tag color="red" v-else>No</a-tag>
+                      </template>
+                    </a-table-column>
+                    <a-table-column title="Actions" key="actions" width="160">
+                      <template slot-scope="text, record">
+                        <a-space>
+                          <a-button size="small" @click="editPackage(record)">Edit</a-button>
+                          <a-button size="small" type="danger" @click="deletePackage(record)">Delete</a-button>
+                        </a-space>
+                      </template>
+                    </a-table-column>
+                  </a-table>
+                </a-col>
+              </a-row>
+            </a-tab-pane>
+
+            <a-tab-pane key="inbounds">
+              <template #tab>
+                <a-icon type="cluster"></a-icon>
+                <span>Inbounds</span>
+              </template>
+              <a-table :data-source="inbounds" :row-key="record => record.id">
+                <a-table-column title="ID" data-index="id" key="id" width="70"></a-table-column>
+                <a-table-column title="Remark" data-index="remark" key="remark"></a-table-column>
+                <a-table-column title="Protocol" data-index="protocol" key="protocol" width="120"></a-table-column>
+                <a-table-column title="Port" data-index="port" key="port" width="100"></a-table-column>
+                <a-table-column title="Enabled" key="enabled" width="120">
+                  <template slot-scope="text, record">
+                    <a-switch :checked="record.enabled" @change="toggleInbound(record)"></a-switch>
+                  </template>
+                </a-table-column>
+              </a-table>
+            </a-tab-pane>
+
+            <a-tab-pane key="orders">
+              <template #tab>
+                <a-icon type="profile"></a-icon>
+                <span>Orders</span>
+              </template>
+              <a-table :data-source="orders" :row-key="record => record.id" :scroll="{ x: 1100 }">
+                <a-table-column title="ID" data-index="id" key="id" width="70"></a-table-column>
+                <a-table-column title="Telegram ID" data-index="telegramId" key="telegramId" width="140"></a-table-column>
+                <a-table-column title="Inbound" data-index="inboundId" key="inboundId" width="90"></a-table-column>
+                <a-table-column title="Package" key="packageId" width="160">
+                  <template slot-scope="text, record">
+                    [[ packageName(record.packageId) ]]
+                  </template>
+                </a-table-column>
+                <a-table-column title="Custom" key="custom" width="160">
+                  <template slot-scope="text, record">
+                    <span v-if="!record.packageId">[[ record.customDataGb ]] GB / [[ record.customDays ]] days</span>
+                    <span v-else>-</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="Price" data-index="price" key="price" width="110"></a-table-column>
+                <a-table-column title="Status" data-index="status" key="status" width="150"></a-table-column>
+                <a-table-column title="Receipt" key="receipt" width="140">
+                  <template slot-scope="text, record">
+                    <a v-if="record.receiptPath" :href="receiptUrl(record.id)" target="_blank">View</a>
+                    <span v-else>-</span>
+                  </template>
+                </a-table-column>
+                <a-table-column title="Actions" key="actions" width="200" fixed="right">
+                  <template slot-scope="text, record">
+                    <a-space v-if="record.status === 'PENDING_REVIEW'">
+                      <a-button size="small" type="primary" @click="approveOrder(record)">Approve</a-button>
+                      <a-button size="small" type="danger" @click="rejectOrder(record)">Reject</a-button>
+                    </a-space>
+                    <span v-else>-</span>
+                  </template>
+                </a-table-column>
+              </a-table>
+            </a-tab-pane>
+          </a-tabs>
+        </a-card>
+      </a-spin>
+    </a-layout-content>
+  </a-layout>
+</a-layout>
+{{template "page/body_scripts" .}}
+{{template "component/aSidebar" .}}
+{{template "component/aThemeSwitch" .}}
+<script>
+  const app = new Vue({
+    delimiters: ['[[', ']]'],
+    mixins: [MediaQueryMixin],
+    el: '#app',
+    data: {
+      themeSwitcher,
+      loadingStates: { spinning: false },
+      packages: [],
+      orders: [],
+      inbounds: [],
+      packageForm: {
+        id: 0,
+        name: '',
+        dataGb: 0,
+        durationDays: 0,
+        price: 0,
+        isActive: true,
+      },
+    },
+    methods: {
+      apiBase() {
+        const base = (typeof basePath !== 'undefined' ? basePath : '/');
+        return base + 'panel/api/shop';
+      },
+      async refreshAll() {
+        await Promise.all([this.loadPackages(), this.loadOrders(), this.loadInbounds()]);
+      },
+      async loadPackages() {
+        const msg = await HttpUtil.get(`${this.apiBase()}/packages`);
+        if (msg && msg.success) {
+          this.packages = msg.obj || [];
+        }
+      },
+      async loadOrders() {
+        const msg = await HttpUtil.get(`${this.apiBase()}/orders`);
+        if (msg && msg.success) {
+          this.orders = msg.obj.orders || [];
+          this.packagesCache = msg.obj.packages || [];
+        }
+      },
+      async loadInbounds() {
+        const msg = await HttpUtil.get(`${this.apiBase()}/inbounds`);
+        if (msg && msg.success) {
+          this.inbounds = msg.obj || [];
+        }
+      },
+      packageName(id) {
+        if (!id || !this.packagesCache) return '-';
+        const pkg = this.packagesCache.find(p => p.id === id);
+        return pkg ? pkg.name : '-';
+      },
+      editPackage(pkg) {
+        this.packageForm = {
+          id: pkg.id,
+          name: pkg.name,
+          dataGb: pkg.dataGb,
+          durationDays: pkg.durationDays,
+          price: pkg.price,
+          isActive: pkg.isActive,
+        };
+      },
+      resetPackageForm() {
+        this.packageForm = { id: 0, name: '', dataGb: 0, durationDays: 0, price: 0, isActive: true };
+      },
+      async savePackage() {
+        if (!this.packageForm.name) {
+          this.$message.error('Name required');
+          return;
+        }
+        const msg = await HttpUtil.post(`${this.apiBase()}/packages`, this.packageForm);
+        if (msg && msg.success) {
+          this.resetPackageForm();
+          this.loadPackages();
+        }
+      },
+      async deletePackage(pkg) {
+        const msg = await HttpUtil.post(`${this.apiBase()}/packages/${pkg.id}/delete`);
+        if (msg && msg.success) {
+          this.loadPackages();
+        }
+      },
+      async toggleInbound(record) {
+        const msg = await HttpUtil.post(`${this.apiBase()}/inbounds/${record.id}`, { enabled: !record.enabled });
+        if (msg && msg.success) {
+          record.enabled = !record.enabled;
+        }
+      },
+      receiptUrl(id) {
+        return `${this.apiBase()}/receipt/${id}`;
+      },
+      async approveOrder(order) {
+        const msg = await HttpUtil.post(`${this.apiBase()}/orders/${order.id}/approve`);
+        if (msg && msg.success) {
+          this.loadOrders();
+        }
+      },
+      async rejectOrder(order) {
+        const msg = await HttpUtil.post(`${this.apiBase()}/orders/${order.id}/reject`);
+        if (msg && msg.success) {
+          this.loadOrders();
+        }
+      }
+    },
+    async mounted() {
+      await this.refreshAll();
+    }
+  });
+</script>
+{{ template "page/body_end" .}}
